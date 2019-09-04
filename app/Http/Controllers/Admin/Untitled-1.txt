@@ -1,0 +1,120 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+use App\Exports\UsersExport;
+use App\Exports\KindersExport;
+
+use Excel;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\User;
+use App\Account;
+use App\Kid;
+use App\Child;
+use App\Kinder;
+use Hash;
+use App\Mail\SendMailable;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Collection;
+class UsersController extends Controller
+{
+    public function index(){
+        $users=User::all();
+        return view('welcome',compact('users'));
+    }
+
+    public function export() 
+    {
+        $kinders = Kinder::all('name','id');
+      
+        foreach($kinders as $key=> $value){
+          
+            $kids = Kid::where("kinder_id",$value->id)->get()->toArray();
+            
+            if(isset($kids) && !empty($kids)){
+                $rows = [];
+                foreach($kids as $kid){
+                    $row = [];
+                    $temp_row = array_values($kid);
+                    foreach($temp_row as $text){
+                        $text = mb_convert_encoding("'".$text."'", 'SJIS', 'UTF-8');
+                        $row[] = $text;
+                    }
+                    $rows[] = $row;
+                    return $rows;
+                    
+                }
+               
+                // $file_data = new KindersExport($rows);
+               
+                // $filename=$value->name.".csv";
+                // Excel::store($file_data, $filename);
+            }
+        }
+    }
+
+
+
+        // return "aa";
+    //    $users=User::all();
+       
+    //     $user=new User();
+        
+    //     $rows=$user->all('name','id');
+    //     $newArrays= array(); 
+    //     $data=new collection($users);
+       
+        
+    //    foreach($rows as $row =>$value){
+    //     $filename=$value->name.".csv";
+       
+    //     Excel::store(new UsersExport, $filename);
+        
+       
+        // return Excel::download(new UsersExport, 'users.xlsx');
+        // return (new UsersExport)->store('users.xlsx');
+    public function store(Request $request){
+       $request->validate([
+            'name'=>'required|min:3',
+            'email'=>'required|email|unique:users',
+            'role'=>'required',
+            'password'=>'required|same:confirm-password',
+            'confirm-password'=>'required'
+       ]);
+
+       $user=new User();
+       $user->name=$request->name;
+       $user->email=$request->email;
+       $user->user_role=$request->role;
+       $user->password=Hash::make($request->password);
+       $user->save();
+       Mail::to($user->email)->send(
+        new SendMailable($user)
+        );
+
+       
+    }
+
+    public function getUser($id){
+        $user=User::find($id);
+
+        return view('admin.user',compact('user'));
+    }
+    public function updateUser(Request $request,$id){
+        $request->validate([
+            //  'name'=>'required|min:3',
+             'email'=>'required|email|unique:users,email,' . $id
+            //  'role'=>'required',
+        ]);
+ 
+        $user=User::find($id);
+        $user->name=$request->name;
+        $user->email=$request->email;
+        $user->user_role=$request->role;
+        $user->isActive=$request->isActive;
+        $user->password=Hash::make($request->password);
+        $user->save();
+        
+     }
+    
+}
