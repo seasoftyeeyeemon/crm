@@ -91,25 +91,27 @@
     <script src="http://code.jquery.com/jquery-1.9.1.js"></script>
     <script src="http://code.jquery.com/ui/1.11.0/jquery-ui.js"></script>
     <script>
+    $(function () {
        $("#FromDate").datepicker({
-        dateFormat: 'yy-mm-dd',
-    //     onSelect: function (selectedDate) {
-    //     if (this.id == 'StartDate') {
-    //         //console.log(selectedDate);//2014-12-30
-    //         var arr = selectedDate.split("/");
-    //         var date = new Date(arr[2]+"-"+arr[1]+"-"+arr[0]);
-    //         var d = date.getDate();
-    //         var m = date.getMonth();
-    //         var y = date.getFullYear();
-    //         var minDate = new Date(y, m, d + 1);
-            
+            dateFormat: 'yy-mm-dd',
+            numberOfMonths: 2,
+            onSelect: function (selected) {
+                var dt = new Date(selected);
+                dt.setDate(dt.getDate() + 1);
+                $("#ToDate").datepicker("option", "minDate", dt);
+            }
+        });
 
-    //     }
-    // }
+        $("#ToDate").datepicker({
+            dateFormat: 'yy-mm-dd',
+            numberOfMonths: 2,
+            onSelect: function (selected) {
+            var dt = new Date(selected);
+            dt.setDate(dt.getDate() - 1);
+            $("#txtFrom").datepicker("option", "maxDate", dt);
+            }
+        });
     });
-
-$("#ToDate").datepicker({dateFormat: 'yy-mm-dd'});
-
   </script>
    
 </body>

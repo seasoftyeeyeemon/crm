@@ -16,8 +16,8 @@ Route::resource('/posts','PostController');
 
 //CSV Export Route
 Route::get('zipfilelist', 'Admin\UsersController@index')->name('zipfilelist');
-Route::get('choose-date', 'Admin\UsersController@create_step1')->name('choosedate');
-Route::post('choose-date', 'Admin\UsersController@post_step1')->name('postdate');
+Route::get('choose-date', 'Admin\UsersController@choose_date')->name('choosedate');
+Route::post('choose-date', 'Admin\UsersController@post_choose_date')->name('postdate');
 Route::get('choose-kindergarten', 'Admin\UsersController@chooseKindergarten')->name('choosekindergarten');
 Route::get('download/{filename}', 'Admin\UsersController@downloadZip')->name('downloadzip');
 Route::get('removefile/{id}/{filename}', 'Admin\UsersController@removeFile')->name('removefile');

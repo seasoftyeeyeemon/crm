@@ -29,13 +29,13 @@ class UsersController extends Controller
         $ziplists=CsvList::paginate(10);
         return view('csv.list',compact('ziplists'));
     }
-    public function create_step1(){
-        return view('csv.show');
+    public function choose_date(){
+        return view('csv.choose_date');
     }
-    public function post_step1(Request $request){
+    public function post_choose_date(Request $request){
         $validatedData = $request->validate([
-            'FromDate' => 'required',
-            'ToDate' => 'required',
+            'FromDate' => 'required|date',
+            'ToDate' => 'required|date|after_or_equal:FromDate',
         ]);
         $request->session()->put('csvlist', $validatedData);
         
@@ -47,111 +47,85 @@ class UsersController extends Controller
         $from_date=Carbon::parse($all['FromDate'])->timestamp;
         $to_date=Carbon::parse($all['ToDate'])->timestamp;
         $kinders = Kinder::whereBetween('created_at', [$from_date,$to_date])->get();
+
         return view('csv.choose-kindergarten',compact('kinders'));
     }
 
     public function export(Request $request) 
     {
-        $all = $request->session()->get('csvlist');
-        $from_date=$all['FromDate'];
-        $to_date=$all['ToDate'];
-        //remove all files in storage/app folder
-        $files = glob(storage_path('app/*'));
+       //remove all files in storage/app folder
+        $files = glob(public_path('csv\*'));
             foreach($files as $file){
                 \File::delete($file);
             }
-        //
+        //end remove csv file
+        $all = $request->session()->get('csvlist');
+        $from_date=$all['FromDate'];
+        $to_date=$all['ToDate'];
         $kinders=[];
         $rows = [];
         $files=[];
         $kinder_ids=$request->kinder_ids;
-        //When selected kindergarten is one
-        if(count($kinder_ids)==1){
-               $kinderid=$kinder_ids[0];
-               $kindergarten=Kinder::find($kinderid);
-                $kids = Child::where("kinder_id",$kinderid)->get(['name','gender','birthday','account_id'])->toArray();
-                dd($kids);
-                    
-                    if(isset($kids) && !empty($kids)){
-                        
-                        foreach($kids as $kid){
-                            $parent=Account::where("id",$kid['account_id'])->first();
-                            array_push ($kid,$parent->name,$parent->prefecture,$parent->email);
-                            $rows[] = array_values($kid); 
-                                
+        foreach($kinder_ids as $kinderid){
+            $kindergarten=Kinder::find($kinderid);
+            $kids = Child::where("kinder_id",$kinderid)->get(['name','gender','birthday','account_id'])->toArray();
+            if(isset($kids) && !empty($kids)){
+                foreach($kids as $kid){
+                    $kidarray=[];
+                    $kid_name=$kid['name'];
+                    if($kid['gender']==1){
+                        $kid_gender="Male";
+                    }else{
+                            $kid_gender="Female";
                         }
+                    $kid_birthday=$kid['birthday'];
+                    $parent_account_id=$kid['account_id'];
+                    $parent=Account::where("id",$kid['account_id'])->first();
+                    array_push ($kidarray,$parent_account_id,$parent->name,$parent->email,$parent->prefecture,$parent->created_at,$kid_name,$kid_gender,$kid_birthday);
+                    $rows[] = array_values($kidarray); 
+                                
+                }
                             
-                        $file_data = new KindersExport($rows);
-                        
-                    }
-                    else{
-                            $file_data = new KindersExport($rows);
-                    }
-                    array_unshift($rows,array('Name','Gender','Birthday','Account_id','Parent Name','Parent Prefecture','Parent Email'));
-                    $filename=$kindergarten->name."_".$from_date. "_" .$to_date .".csv";
-                    Excel::store($file_data, $filename);
-                    
+                    $file_data = new KindersExport($rows);
             
-        
-               
-        }//end
-        //When selected kindergarten is multiple
-        else{
-            foreach($kinder_ids as $kinderid){
-                $kindergarten=Kinder::find($kinderid);
-                $kids = Child::where("kinder_id",$kinderid)->get(['name','gender','birthday','account_id'])->toArray();
+            }else{
+                    $file_data = new KindersExport($rows);
+
+                }
                     
-                    if(isset($kids) && !empty($kids)){
-                        
-                        foreach($kids as $kid){
-                            $parent=Account::where("id",$kid['account_id'])->first();
-                            array_push ($kid,$parent->name,$parent->email,$parent->prefecture,$parent->created_at);
-                            $rows[] = array_values($kid); 
-                                
-                        }
-                            
-                        $file_data = new KindersExport($rows);
-                        
-                    }
-                    else{
-                            $file_data = new KindersExport($rows);
-                    }
-                    array_unshift($rows,array('Child Name','Child Gender','Child Birthday','Parent Account_id','Parent Name','Parent Email','Parent Prefecture','Parent Registered Date'));
-                    $filename=$kindergarten->name."_".$from_date. "_" .$to_date .".csv";
-                    Excel::store($file_data, $filename);
+                array_unshift($rows,array());
                     
-            }
+                $filename=$kindergarten->name."_".$from_date. "_" .$to_date .".csv";
+                $dest=public_path('csv/'.$filename);
+                Excel::store($file_data, $filename);
+
+            //copy to public folder
+                $filepath = storage_path('app/'.$filename);
+                if(File::exists($filepath)){
+                copy($filepath,$dest); 
+                \File::delete($filepath);
+                }
+            //end
         }
+        
         //Zip create and store in database
+       
+        $files = glob(public_path('csv/*'));
+        Zipper::make(public_path('zip/園連携履歴_'.$from_date.'_'.$to_date.'.zip'))->add($files);
+
+        //store in DB
         $zip=new CsvList();
-        $kinders=Kinder::all();
-        $files = glob(storage_path('app/*'));
-        Zipper::make('download/園連携履歴_'.$from_date.'_'.$to_date.'.zip')->add($files);
-        $zipfiles = glob('download/園連携履歴_'.$from_date.'_'.$to_date.'.zip');
-        $zip->filename='download/園連携履歴_'.$from_date.'_'.$to_date.'.zip';
+        $zip->filename='園連携履歴_'.$from_date.'_'.$to_date.'.zip';
         $zip->save();
-        //end  Zip create and store in database  
+
+      //end store in DB 
          return redirect("/zipfilelist");
         
     }
 
-    public function zipAttachment(Request $request){
-       
-       
-        $files = glob(storage_path('app/*'));
-      
-       
-      Zipper::make('download/園連携履歴_1272019_1282019.zip')->add($files);
-      $zipfiles = glob('download/園連携履歴_1272019_1282019.zip');
-      $zip->kinder_id=$kinder_id;
-      $zip->filename=$zipfiles[0];
-      $zip->save();
-      
-    //  return view('csv.show',compact('zipfiles','kinders'));
-  }
-
   public function downloadZip($filename){
-        Zipper::download(public_path($filename));
+        
+    Zipper::download(public_path($filename));
   }
 
   public function removeFile($id,$filename){
