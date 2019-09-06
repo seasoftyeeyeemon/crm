@@ -11,8 +11,8 @@
                 </div>
                 <ul class="list-group list-group-flush">
                 @foreach($ziplists as $ziplist)
-                    <li class="list-group-item"><a href="download/{{trim($ziplist->filename,'download/')}}">{{trim($ziplist->filename,'download/')}}</a>
-                    <a href="{{route('removefile',[$ziplist->id,trim($ziplist->filename,'download/')])}}"><button class="btn-danger btn-small">Delete</button></a>
+                    <li class="list-group-item"><a href="download/{{$ziplist->filename}}">{{$ziplist->filename}}</a>
+                    <a href="{{route('removefile',[$ziplist->id,$ziplist->filename])}}"><button class="btn-danger btn-small">Delete</button></a>
                     </li>
                     
                 @endforeach

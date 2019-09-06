@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 use App\Exports\UsersExport;
 use App\Exports\KindersExport;
-use Zipper;
+use Chumper\Zipper\Facades\Zipper;
 use Excel;
 use File;
 use Illuminate\Http\Request;
@@ -14,6 +14,7 @@ use App\Kid;
 use App\Child;
 use App\Kinder;
 use Hash;
+use Response;
 use Redirect;
 use App\CsvList;
 use \DateTime;
@@ -68,20 +69,23 @@ class UsersController extends Controller
         $kinder_ids=$request->kinder_ids;
         foreach($kinder_ids as $kinderid){
             $kindergarten=Kinder::find($kinderid);
-            $kids = Child::where("kinder_id",$kinderid)->get(['name','gender','birthday','account_id'])->toArray();
+            $kids = Child::where("kinder_id",$kinderid)->get(['name','gender','birthday','account_id','updated_at'])->toArray();
             if(isset($kids) && !empty($kids)){
                 foreach($kids as $kid){
-                    $kidarray=[];
+                    $kidarray=[]; 
                     $kid_name=$kid['name'];
+                    //test male & female
                     if($kid['gender']==1){
                         $kid_gender="Male";
                     }else{
                             $kid_gender="Female";
                         }
+                    //end
                     $kid_birthday=$kid['birthday'];
+                    $school_linked_date=$kid['updated_at'];
                     $parent_account_id=$kid['account_id'];
                     $parent=Account::where("id",$kid['account_id'])->first();
-                    array_push ($kidarray,$parent_account_id,$parent->name,$parent->email,$parent->prefecture,$parent->created_at,$kid_name,$kid_gender,$kid_birthday);
+                    array_push ($kidarray,$parent_account_id,$parent->name,$parent->email,$parent->prefecture,$parent->created_at,$kid_name,$kid_gender,$kid_birthday,$school_linked_date);
                     $rows[] = array_values($kidarray); 
                                 
                 }
@@ -109,23 +113,37 @@ class UsersController extends Controller
         }
         
         //Zip create and store in database
-       
         $files = glob(public_path('csv/*'));
-        Zipper::make(public_path('zip/園連携履歴_'.$from_date.'_'.$to_date.'.zip'))->add($files);
-
-        //store in DB
-        $zip=new CsvList();
-        $zip->filename='園連携履歴_'.$from_date.'_'.$to_date.'.zip';
-        $zip->save();
-
-      //end store in DB 
-         return redirect("/zipfilelist");
+        $zipfile_path=public_path('zip/園連携履歴_'.$from_date.'_'.$to_date.'.zip');
+        if(File::exists($zipfile_path)){
+            Zipper::make('zip/園連携履歴_'.$from_date.'_'.$to_date.'.zip')->add($files);
+            //store in DB
+            $zip=new CsvList();
+            $zip_id=CsvList::where('filename','園連携履歴_2018-03-08_2019-01-04.zip')->pluck('id');
+            $update_data=CsvList::find($zip_id[0]);
+            $update_data->update();
+            //end store in DB 
+        }else{
+            Zipper::make(public_path('zip/園連携履歴_'.$from_date.'_'.$to_date.'.zip'))->add($files);
+            //store in DB
+            $zip=new CsvList();
+            $zip->filename='園連携履歴_'.$from_date.'_'.$to_date.'.zip';
+            $zip->save();
+            //end store in DB 
+        }
+         
+        return redirect("/zipfilelist");
         
     }
 
   public function downloadZip($filename){
-        
-    Zipper::download(public_path($filename));
+    $zipfile_path=public_path('zip/'.$filename);
+    if (File::exists($zipfile_path)) {
+        return Response::download(public_path('zip/'.$filename));
+    } else {
+        return ['status'=>'zip file does not exist'];
+    }
+   
   }
 
   public function removeFile($id,$filename){
