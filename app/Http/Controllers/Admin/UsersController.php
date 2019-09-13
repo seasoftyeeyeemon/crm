@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Admin;
 use App\Exports\UsersExport;
 use App\Exports\KindersExport;
@@ -17,6 +16,7 @@ use Hash;
 use Response;
 use Redirect;
 use App\CsvList;
+use App\SchoolLinkLog;
 use \DateTime;
 use Carbon\Carbon;
 use App\Mail\SendMailable;
@@ -26,9 +26,8 @@ use Illuminate\Support\Facades\Storage;
 class UsersController extends Controller
 {
     public function index(){
-       
-        $ziplists=CsvList::paginate(10);
-        return view('csv.list',compact('ziplists'));
+       $ziplists=CsvList::paginate(10);
+       return view('csv.list',compact('ziplists'));
     }
     public function choose_date(){
         return view('csv.choose_date');
@@ -56,25 +55,26 @@ class UsersController extends Controller
     {
        //remove all files in storage/app folder
         $files = glob(public_path('csv\*'));
-            foreach($files as $file){
-                \File::delete($file);
-            }
+        foreach($files as $file){
+            \File::delete($file);
+        }
         //end remove csv file
         $all = $request->session()->get('csvlist');
         $from_date=$all['FromDate'];
         $to_date=$all['ToDate'];
         $kinders=[];
-        $rows = [];
+       
         $files=[];
         $kinder_ids=$request->kinder_ids;
         foreach($kinder_ids as $kinderid){
+            $rows = [];
             $kindergarten=Kinder::find($kinderid);
-            $kids = Child::where("kinder_id",$kinderid)->get(['name','gender','birthday','account_id','updated_at'])->toArray();
+            $kids = Child::where("kinder_id",$kinderid)->get(['id','name','gender','birthday','account_id','updated_at'])->toArray();
             if(isset($kids) && !empty($kids)){
                 foreach($kids as $kid){
-                    $kidarray=[]; 
+                    $kidarray=[];
                     $kid_name=$kid['name'];
-                    //test male & female
+                    //check male & female
                     if($kid['gender']==1){
                         $kid_gender="Male";
                     }else{
@@ -82,31 +82,29 @@ class UsersController extends Controller
                         }
                     //end
                     $kid_birthday=$kid['birthday'];
-                    $school_linked_date=$kid['updated_at'];
+                    $school_link_log=SchoolLinkLog::where("child_id",$kid['id'])->first();
+                    $child_school_link_date=$school_link_log['created_at'];
                     $parent_account_id=$kid['account_id'];
                     $parent=Account::where("id",$kid['account_id'])->first();
-                    array_push ($kidarray,$parent_account_id,$parent->name,$parent->email,$parent->prefecture,$parent->created_at,$kid_name,$kid_gender,$kid_birthday,$school_linked_date);
+                    array_push ($kidarray,$parent_account_id,$parent->name,$parent->email,$parent->prefecture,$parent->created_at,$kid_name,$kid_gender,$kid_birthday,$child_school_link_date);
+    
                     $rows[] = array_values($kidarray); 
-                                
                 }
-                            
+                
                     $file_data = new KindersExport($rows);
-            
-            }else{
+                }else{
                     $file_data = new KindersExport($rows);
 
                 }
-                    
                 array_unshift($rows,array());
-                    
                 $filename=$kindergarten->name."_".$from_date. "_" .$to_date .".csv";
-                $dest=public_path('csv/'.$filename);
+                $destination=public_path('csv/'.$filename);
                 Excel::store($file_data, $filename);
 
             //copy to public folder
                 $filepath = storage_path('app/'.$filename);
                 if(File::exists($filepath)){
-                copy($filepath,$dest); 
+                copy($filepath,$destination); 
                 \File::delete($filepath);
                 }
             //end
@@ -119,7 +117,7 @@ class UsersController extends Controller
             Zipper::make('zip/園連携履歴_'.$from_date.'_'.$to_date.'.zip')->add($files);
             //store in DB
             $zip=new CsvList();
-            $zip_id=CsvList::where('filename','園連携履歴_2018-03-08_2019-01-04.zip')->pluck('id');
+            $zip_id=CsvList::where('filename','園連携履歴_'.$from_date.'_'.$to_date.'.zip')->pluck('id');
             $update_data=CsvList::find($zip_id[0]);
             $update_data->update();
             //end store in DB 
@@ -140,7 +138,7 @@ class UsersController extends Controller
     $zipfile_path=public_path('zip/'.$filename);
     if (File::exists($zipfile_path)) {
         return Response::download(public_path('zip/'.$filename));
-    } else {
+    }else {
         return ['status'=>'zip file does not exist'];
     }
    
@@ -148,20 +146,15 @@ class UsersController extends Controller
 
   public function removeFile($id,$filename){
      
-    if(\File::exists(public_path('download/'.$filename))){
-       
-        $id=CsvList::find($id);
-        $id->delete();
-        \File::delete(public_path('download/'.$filename));
-       
-    
-      }else{
-    
+    if(\File::exists(public_path('zip/'.$filename))){
+       $id=CsvList::find($id);
+       $id->delete();
+       \File::delete(public_path('zip/'.$filename));
+    }else{
         dd('File does not exists.');
-    
-      }
+    }
       return Redirect::back()->with('success',"You delete successfully");
-  }
+    }
 
 
     public function store(Request $request){
